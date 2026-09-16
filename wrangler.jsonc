@@ -1,0 +1,19 @@
+{
+  "name": "webgate",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-16",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GATEWAY",
+        "class_name": "Gateway"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["Gateway"]
+    }
+  ]
+}
