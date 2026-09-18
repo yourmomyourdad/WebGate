@@ -7,12 +7,7 @@ export interface Env {
 export class Gateway extends DurableObject {
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade") !== "websocket") {
-      return new Response("WebGate is alive :D", {
-        status: 200,
-        headers: {
-          "content-type": "text/plain; charset=utf-8",
-        },
-      });
+      return new Response("WebGate is alive :D");
     }
 
     const pair = new WebSocketPair();
@@ -21,12 +16,12 @@ export class Gateway extends DurableObject {
     this.ctx.acceptWebSocket(server);
 
     server.send(JSON.stringify({
-      type: "gateway-connected",
+      type: "gateway-connected"
     }));
 
     return new Response(null, {
       status: 101,
-      webSocket: client,
+      webSocket: client
     });
   }
 
@@ -34,31 +29,13 @@ export class Gateway extends DurableObject {
     ws: WebSocket,
     message: string | ArrayBuffer
   ) {
-    console.log("received message", typeof message);
     ws.send(message);
-  }
-
-  async webSocketClose(
-    ws: WebSocket,
-    code: number,
-    reason: string,
-    wasClean: boolean
-  ) {
-    console.log("WebSocket closed", code, reason, wasClean);
   }
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    if (request.headers.get("Upgrade") !== "websocket") {
-      return new Response("WebGate online :D", {
-        status: 200,
-      });
-    }
-
     const id = env.GATEWAY.idFromName("main");
-    const gateway = env.GATEWAY.get(id);
-
-    return gateway.fetch(request);
-  },
+    return env.GATEWAY.get(id).fetch(request);
+  }
 };
