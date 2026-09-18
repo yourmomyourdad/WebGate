@@ -1,17 +1,10 @@
 {
   "name": "webgate",
-  "version": "1.0.0",
-  "type": "module",
+  "private": true,
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/server.js"
-  },
-  "dependencies": {
-    "ws": "^8.18.0"
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "@types/ws": "^8.5.0",
-    "typescript": "^5.9.0"
+    "wrangler": "^4.68.0"
   }
 }
