@@ -4,85 +4,10 @@ export interface Env {
   GATEWAY: DurableObjectNamespace<Gateway>;
 }
 
-type Role = "agent" | "client";
-
-function testPage() {
-  return `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>WebGate Test</title>
-  <style>
-    body {
-      font-family: monospace;
-      background: #111;
-      color: #eee;
-      padding: 30px;
-    }
-
-    #status {
-      font-size: 22px;
-      margin-bottom: 20px;
-    }
-
-    #log {
-      white-space: pre-wrap;
-      background: #000;
-      padding: 20px;
-      border-radius: 8px;
-      min-height: 200px;
-    }
-  </style>
-</head>
-
-<body>
-  <div id="status">Connecting...</div>
-  <div id="log"></div>
-
-  <script>
-    const status = document.getElementById("status");
-    const log = document.getElementById("log");
-
-    function write(message) {
-      log.textContent += message + "\\n";
-    }
-
-    const ws = new WebSocket(
-      (location.protocol === "https:" ? "wss://" : "ws://") +
-      location.host +
-      "/client"
-    );
-
-    ws.onopen = () => {
-      status.textContent = "🟢 Connected to WebGate";
-      write("Client connected");
-      ws.send("HELLO FROM CHROMEBOOK");
-    };
-
-    ws.onmessage = (event) => {
-      write("Received: " + event.data);
-
-      if (event.data === "HELLO FROM CHROMEBOOK") {
-        status.textContent = "🎉 FULL TUNNEL ROUND TRIP WORKS";
-      }
-    };
-
-    ws.onerror = () => {
-      status.textContent = "🔴 WebSocket error";
-      write("WebSocket error");
-    };
-
-    ws.onclose = (event) => {
-      status.textContent = "⚫ Disconnected";
-      write("Closed: " + event.code);
-    };
-  </script>
-</body>
-</html>`;
-}
+type Role = "agent" | "wisp";
 
 export class Gateway extends DurableObject {
-  private getSockets(role: Role): WebSocket[] {
+  private sockets(role: Role): WebSocket[] {
     return this.ctx
       .getWebSockets()
       .filter((ws) => ws.deserializeAttachment()?.role === role);
@@ -91,20 +16,19 @@ export class Gateway extends DurableObject {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
-    const role = url.pathname.slice(1) as Role;
+    const role =
+      url.pathname === "/agent"
+        ? "agent"
+        : url.pathname === "/wisp"
+          ? "wisp"
+          : null;
 
-    if (role !== "agent" && role !== "client") {
-      return new Response(testPage(), {
-        headers: {
-          "content-type": "text/html; charset=utf-8",
-        },
-      });
+    if (!role) {
+      return new Response("WebGate online :D");
     }
 
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
-      return new Response("WebSocket required", {
-        status: 426,
-      });
+      return new Response("WebSocket required", { status: 426 });
     }
 
     const pair = new WebSocketPair();
@@ -112,24 +36,7 @@ export class Gateway extends DurableObject {
 
     this.ctx.acceptWebSocket(server);
 
-    server.serializeAttachment({
-      role,
-    });
-
-    if (role === "agent") {
-      server.send(
-        JSON.stringify({
-          type: "agent-connected",
-        }),
-      );
-    } else {
-      server.send(
-        JSON.stringify({
-          type: "client-connected",
-          agentConnected: this.getSockets("agent").length > 0,
-        }),
-      );
-    }
+    server.serializeAttachment({ role });
 
     return new Response(null, {
       status: 101,
@@ -146,14 +53,14 @@ export class Gateway extends DurableObject {
     } | null;
 
     if (!state) {
-      ws.close(1008, "Missing state");
+      ws.close(1008, "Missing connection state");
       return;
     }
 
-    const targetRole: Role =
-      state.role === "agent" ? "client" : "agent";
+    const otherRole =
+      state.role === "agent" ? "wisp" : "agent";
 
-    for (const target of this.getSockets(targetRole)) {
+    for (const target of this.sockets(otherRole)) {
       try {
         target.send(message);
       } catch {
@@ -162,16 +69,11 @@ export class Gateway extends DurableObject {
     }
   }
 
-  async webSocketClose() {
-    // Nothing needed yet.
-  }
+  async webSocketClose() {}
 }
 
 export default {
-  async fetch(
-    request: Request,
-    env: Env,
-  ): Promise<Response> {
+  async fetch(request: Request, env: Env) {
     const id = env.GATEWAY.idFromName("main");
 
     return env.GATEWAY
